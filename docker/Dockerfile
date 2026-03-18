@@ -587,10 +587,40 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # https://docs.flashinfer.ai/installation.html
 # From versions.json: .flashinfer.version
 ARG FLASHINFER_VERSION=0.6.6
+
+# Build flashinfer-jit-cache for CUDA 12.4 (since prebuilt packages are not available)
+# For CUDA 12.6+, use prebuilt packages from FlashInfer PyPI
 RUN --mount=type=cache,target=/root/.cache/uv \
+    --mount=type=cache,target=/root/.cache/pip \
+    --mount=type=cache,target=/root/.cache/git \
     uv pip install --system flashinfer-cubin==${FLASHINFER_VERSION} \
-    && uv pip install --system flashinfer-jit-cache==${FLASHINFER_VERSION} \
-        --extra-index-url https://flashinfer.ai/whl/cu$(echo $CUDA_VERSION | cut -d. -f1,2 | tr -d '.') \
+    && if [ "${CUDA_VERSION}" = "12.4" ]; then \
+        echo "Building flashinfer-jit-cache for CUDA 12.4..." \
+        # Install git for cloning
+        && apt-get update \
+        && apt-get install -y --no-install-recommends git \
+        && rm -rf /var/lib/apt/lists/* \
+        # Clone FlashInfer repository
+        && git clone https://github.com/flashinfer-ai/flashinfer.git \
+            --recursive \
+            --depth 1 \
+            --branch "v${FLASHINFER_VERSION}" \
+            /tmp/flashinfer \
+        # Build flashinfer-jit-cache
+        && cd /tmp/flashinfer/flashinfer-jit-cache \
+        && export FLASHINFER_CUDA_ARCH_LIST="7.0 7.5 8.0 8.6 8.9 9.0 10.0" \
+        && python3 -m pip install --no-cache-dir build \
+        && python3 -m build --no-isolation --wheel \
+        # Install the built wheel
+        && uv pip install --system dist/*.whl \
+        # Cleanup
+        && rm -rf /tmp/flashinfer \
+        && python3 -m pip uninstall -y build; \
+    else \
+        echo "Installing prebuilt flashinfer-jit-cache for CUDA ${CUDA_VERSION}..." \
+        && uv pip install --system flashinfer-jit-cache==${FLASHINFER_VERSION} \
+            --extra-index-url https://flashinfer.ai/whl/cu$(echo $CUDA_VERSION | cut -d. -f1,2 | tr -d '.'); \
+    fi \
     && flashinfer show-config
 
 # ============================================================

@@ -36,9 +36,6 @@ jobs:
         with:
           ref: main
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -49,12 +46,12 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push multi-arch images
+      - name: Build and push Docker image
         uses: docker/build-push-action@v6
         with:
           context: .
           file: docker/Dockerfile
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
           target: ${{ inputs.target || 'vllm-openai' }}
           push: true
           tags: ${{ env.REGISTRY }}/${{ github.repository }}:${{ inputs.image_tag }}
